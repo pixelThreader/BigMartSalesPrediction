@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Info } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -61,6 +62,52 @@ const TRAIN_DEFAULTS = {
 const METRIC_KEYS = ['mae', 'mse', 'rmse', 'r2', 'mape']
 const THEME_STORAGE_KEY = 'dashboard-theme'
 const DEFAULT_MODEL_VALUE = '__default__'
+const DATASET_SOURCE_URL = 'https://www.kaggle.com/datasets/yasserh/bigmartsalesdataset'
+const DATASET_COLUMN_INFO = [
+  {
+    column: 'Item_Identifier',
+    description: 'Unique Number assigned to each Item',
+  },
+  {
+    column: 'Item_Weight',
+    description: 'Item Weight in g',
+  },
+  {
+    column: 'Item_Fat_Content',
+    description: 'Item Fat Content',
+  },
+  {
+    column: 'Item_Visibility',
+    description: 'Placement value of each item: 0 - Far & Behind 1 - Near & Front',
+  },
+  {
+    column: 'Item_Type',
+    description: 'Type of item utility',
+  },
+  {
+    column: 'Item_MRP',
+    description: 'Price of the Item',
+  },
+  {
+    column: 'Outlet_Identifier',
+    description: 'Unique Outler Name',
+  },
+  {
+    column: 'Outlet_Establishment_Year',
+    description: 'Year of Outlet Establishment',
+  },
+  {
+    column: 'Outlet_Size',
+    description: 'Size of the Outler',
+  },
+  {
+    column: 'Outlet_Location_Type',
+    description: 'Tier of Outler Location',
+  },
+]
+const DATASET_COLUMN_INFO_MAP = Object.fromEntries(
+  DATASET_COLUMN_INFO.map((item) => [item.column, item.description]),
+)
 
 function numberOrUndefined(value) {
   if (value === '' || value === null || value === undefined) {
@@ -72,6 +119,10 @@ function numberOrUndefined(value) {
 
 function prettyMetricName(key) {
   return key.toUpperCase()
+}
+
+function getDatasetColumnDescription(column) {
+  return DATASET_COLUMN_INFO_MAP[column] ?? ''
 }
 
 function getTrainingMetrics(result) {
@@ -432,6 +483,7 @@ function App() {
   const [reportError, setReportError] = useState('')
   const [reportResult, setReportResult] = useState(null)
   const [viewerGraph, setViewerGraph] = useState(null)
+  const [datasetInfoOpen, setDatasetInfoOpen] = useState(false)
 
   useEffect(() => {
     const root = document.documentElement
@@ -886,10 +938,17 @@ function App() {
           <TabsContent value="dataset" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Dataset Browser</CardTitle>
-                <CardDescription>
-                  Fetch paginated dataset rows from the backend.
-                </CardDescription>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <CardTitle>Dataset Browser</CardTitle>
+                    <CardDescription>
+                      Fetch paginated dataset rows from the backend.
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setDatasetInfoOpen(true)}>
+                    Info
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-[auto_auto] md:items-end">
@@ -947,9 +1006,32 @@ function App() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {datasetColumns.map((column) => (
-                            <TableHead key={column}>{column}</TableHead>
-                          ))}
+                          {datasetColumns.map((column) => {
+                            const description = getDatasetColumnDescription(column)
+
+                            return (
+                              <TableHead key={column}>
+                                <div className="flex items-center gap-1.5">
+                                  <span>{column}</span>
+                                  {description ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
+                                          aria-label={`Info about ${column}`}>
+                                          <Info className="size-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs text-xs">
+                                        {description}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : null}
+                                </div>
+                              </TableHead>
+                            )
+                          })}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1646,6 +1728,49 @@ function App() {
                 </p>
               </div>
             ) : null}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={datasetInfoOpen} onOpenChange={setDatasetInfoOpen}>
+          <DialogContent className="max-h-[90vh] w-[min(96vw,980px)] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Dataset Information</DialogTitle>
+              <DialogDescription>
+                Column descriptions for the BigMart dataset used in this dashboard.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <ScrollArea className="max-h-[60vh] rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-64">Column</TableHead>
+                      <TableHead>Description</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {DATASET_COLUMN_INFO.map((item) => (
+                      <TableRow key={item.column}>
+                        <TableCell className="font-medium">{item.column}</TableCell>
+                        <TableCell>{item.description}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+
+              <p className="text-sm text-muted-foreground">
+                Source:{' '}
+                <a
+                  href={DATASET_SOURCE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline-offset-4 hover:underline">
+                  {DATASET_SOURCE_URL}
+                </a>
+              </p>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
