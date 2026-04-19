@@ -81,10 +81,6 @@ export function generateSyntheticData(payload) {
     return postJson('/api/v1/synthetic-data', payload)
 }
 
-export function compareModels(payload) {
-    return postJson('/api/v1/models/compare', payload)
-}
-
 export function fetchLatestReport() {
     return request('/api/v1/reports/latest')
 }

@@ -43,7 +43,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   buildAbsoluteUrl,
-  compareModels,
   fetchDataset,
   fetchHealth,
   fetchLatestReport,
@@ -270,85 +269,6 @@ function getModelDisplayName(model) {
   return model?.model_name || model?.model_stem || model?.model_path || 'Model'
 }
 
-function toComparableValue(value) {
-  if (value === null || value === undefined || value === '') {
-    return ''
-  }
-
-  if (typeof value === 'number') {
-    return value
-  }
-
-  const parsedNumber = Number(value)
-  if (Number.isFinite(parsedNumber) && String(value).trim() !== '') {
-    return parsedNumber
-  }
-
-  const parsedDate = Date.parse(value)
-  if (!Number.isNaN(parsedDate) && /\d{4}-\d{2}-\d{2}/.test(String(value))) {
-    return parsedDate
-  }
-
-  return String(value).toLowerCase()
-}
-
-function sortRows(rows, sortKey, sortDirection) {
-  const direction = sortDirection === 'desc' ? -1 : 1
-
-  return [...rows].sort((left, right) => {
-    const leftValue = toComparableValue(left?.[sortKey])
-    const rightValue = toComparableValue(right?.[sortKey])
-
-    if (typeof leftValue === 'number' && typeof rightValue === 'number') {
-      return (leftValue - rightValue) * direction
-    }
-
-    return String(leftValue).localeCompare(String(rightValue)) * direction
-  })
-}
-
-function normalizeRankingRows(ranking) {
-  if (!Array.isArray(ranking)) {
-    return []
-  }
-
-  return ranking.map((row, index) => {
-    if (row && typeof row === 'object' && !Array.isArray(row)) {
-      return { ...row, _rank: row.rank ?? row.position ?? index + 1 }
-    }
-
-    return {
-      _rank: index + 1,
-      model_path: String(row ?? ''),
-    }
-  })
-}
-
-function getTableColumns(rows) {
-  const columns = []
-  const seen = new Set()
-
-  rows.forEach((row) => {
-    Object.keys(row || {}).forEach((key) => {
-      if (key === '_rank' || seen.has(key)) {
-        return
-      }
-      seen.add(key)
-      columns.push(key)
-    })
-  })
-
-  return columns
-}
-
-function getRowDisplayLabel(row) {
-  if (!row || typeof row !== 'object') {
-    return String(row ?? '--')
-  }
-
-  return row.model_name || row.model_stem || row.model_path || row.name || '--'
-}
-
 function safeJsonStringify(value) {
   try {
     return JSON.stringify(value, null, 2)
@@ -460,13 +380,6 @@ function App() {
   const [syntheticLoading, setSyntheticLoading] = useState(false)
   const [syntheticError, setSyntheticError] = useState('')
   const [syntheticResult, setSyntheticResult] = useState(null)
-
-  const [compareSelectedPaths, setCompareSelectedPaths] = useState([])
-  const [compareLoading, setCompareLoading] = useState(false)
-  const [compareError, setCompareError] = useState('')
-  const [compareResult, setCompareResult] = useState(null)
-  const [compareSortKey, setCompareSortKey] = useState('')
-  const [compareSortDirection, setCompareSortDirection] = useState('asc')
 
   const [datasetPage, setDatasetPage] = useState(1)
   const [datasetPageSize, setDatasetPageSize] = useState('20')
@@ -584,20 +497,6 @@ function App() {
     return selectedModelDetails ?? fromList ?? null
   }, [activeModelPath, modelsCatalog.models, selectedModelDetails])
 
-  const compareRows = useMemo(
-    () => normalizeRankingRows(compareResult?.ranking),
-    [compareResult],
-  )
-  const compareColumns = useMemo(() => getTableColumns(compareRows), [compareRows])
-  const sortedCompareRows = useMemo(() => {
-    if (!compareRows.length) {
-      return []
-    }
-
-    const sortKey = compareSortKey || compareColumns[0] || '_rank'
-    return sortRows(compareRows, sortKey, compareSortDirection)
-  }, [compareColumns, compareRows, compareSortDirection, compareSortKey])
-
   const reportMetrics = reportResult?.metrics ?? {}
   const reportPlots =
     reportResult?.plot_urls && typeof reportResult.plot_urls === 'object'
@@ -610,30 +509,6 @@ function App() {
 
   function updateSyntheticField(field, value) {
     setSyntheticForm((previous) => ({ ...previous, [field]: value }))
-  }
-
-  function toggleCompareModel(modelPath) {
-    setCompareSelectedPaths((previous) => {
-      if (previous.includes(modelPath)) {
-        return previous.filter((path) => path !== modelPath)
-      }
-
-      return [...previous, modelPath]
-    })
-  }
-
-  function handleCompareSort(column) {
-    setCompareSortKey((previousKey) => {
-      if (previousKey === column) {
-        setCompareSortDirection((previousDirection) =>
-          previousDirection === 'asc' ? 'desc' : 'asc',
-        )
-        return previousKey
-      }
-
-      setCompareSortDirection('asc')
-      return column
-    })
   }
 
   async function handleTrain(event) {
@@ -725,25 +600,6 @@ function App() {
     }
   }
 
-  async function handleCompareModels() {
-    setCompareLoading(true)
-    setCompareError('')
-
-    try {
-      const response = await compareModels({
-        model_paths: compareSelectedPaths,
-      })
-      setCompareResult(response)
-
-      setCompareSortKey('_rank')
-      setCompareSortDirection('asc')
-    } catch (error) {
-      setCompareError(error.message)
-    } finally {
-      setCompareLoading(false)
-    }
-  }
-
   async function handleFetchLatestReport() {
     setReportLoading(true)
     setReportError('')
@@ -800,11 +656,10 @@ function App() {
         </section>
 
         <Tabs defaultValue="train" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 gap-2 p-1 md:grid-cols-5">
+          <TabsList className="grid w-full grid-cols-2 gap-2 p-1 md:grid-cols-4">
             <TabsTrigger value="train">Train</TabsTrigger>
             <TabsTrigger value="dataset">Dataset</TabsTrigger>
             <TabsTrigger value="predict">Predict</TabsTrigger>
-            <TabsTrigger value="compare">Compare</TabsTrigger>
             <TabsTrigger value="report">Latest Report</TabsTrigger>
           </TabsList>
 
@@ -1453,167 +1308,6 @@ function App() {
                     Generate synthetic records to auto-fill the prediction editor.
                   </p>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="compare" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Multi-Model Comparison</CardTitle>
-                <CardDescription>
-                  Select several models from the catalog and compare them side by side.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Badge variant="outline">Selected models: {compareSelectedPaths.length}</Badge>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCompareSelectedPaths([])}>
-                      Clear
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setCompareSelectedPaths(modelsCatalog.models.map((model) => model.model_path))}>
-                      Select All
-                    </Button>
-                    <Button onClick={handleCompareModels} disabled={compareLoading || compareSelectedPaths.length === 0}>
-                      {compareLoading ? 'Comparing...' : 'Compare Models'}
-                    </Button>
-                  </div>
-                </div>
-
-                {compareError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Comparison Failed</AlertTitle>
-                    <AlertDescription>{compareError}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
-                  <div className="space-y-2 rounded-lg border p-3">
-                    <div className="text-sm font-medium">Choose Models</div>
-                    {modelsLoading ? (
-                      <div className="space-y-2">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                          <Skeleton key={index} className="h-14 w-full" />
-                        ))}
-                      </div>
-                    ) : modelsCatalog.models.length > 0 ? (
-                      <ScrollArea className="h-72 rounded-md">
-                        <div className="space-y-2 pr-3">
-                          {modelsCatalog.models.map((model) => {
-                            const checked = compareSelectedPaths.includes(model.model_path)
-                            return (
-                              <button
-                                key={model.model_path}
-                                type="button"
-                                onClick={() => toggleCompareModel(model.model_path)}
-                                className="flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/40">
-                                <Checkbox checked={checked} />
-                                <div className="min-w-0 flex-1 space-y-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-medium">{getModelDisplayName(model)}</span>
-                                    {model.has_report ? <Badge variant="outline">Report</Badge> : null}
-                                  </div>
-                                  <div className="truncate text-xs text-muted-foreground">{model.model_path}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {formatBytes(model.size_bytes)} · {model.modified_at || '--'}
-                                  </div>
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </ScrollArea>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No models returned by the backend.</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {compareResult ? (
-                      <>
-                        <div className="grid gap-3 md:grid-cols-4">
-                          <SummaryCard label="Best Model" value={getRowDisplayLabel(compareResult.best_model)} />
-                          <SummaryCard label="Ranking Metric" value={compareResult.ranking_metric ?? '--'} />
-                          <SummaryCard label="Model Count" value={compareResult.model_count ?? '--'} />
-                          <SummaryCard label="Sample Size" value={compareResult.sample_size ?? '--'} />
-                        </div>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Ranking Results</CardTitle>
-                            <CardDescription>
-                              Click a column header to sort the comparison table.
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            {compareRows.length > 0 ? (
-                              <ScrollArea className="w-full rounded-md border">
-                                <div className="min-w-[720px]">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead
-                                          className="cursor-pointer"
-                                          onClick={() => handleCompareSort('_rank')}>
-                                          Rank
-                                        </TableHead>
-                                        {compareColumns.map((column) => (
-                                          <TableHead
-                                            key={column}
-                                            className="cursor-pointer"
-                                            onClick={() => handleCompareSort(column)}>
-                                            {column}
-                                          </TableHead>
-                                        ))}
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {sortedCompareRows.map((row, index) => (
-                                        <TableRow key={`${row.model_path ?? row.model_name ?? index}-${index}`}>
-                                          <TableCell>{row._rank ?? index + 1}</TableCell>
-                                          {compareColumns.map((column) => (
-                                            <TableCell key={`${index}-${column}`}>
-                                              {String(row?.[column] ?? '')}
-                                            </TableCell>
-                                          ))}
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </div>
-                              </ScrollArea>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">
-                                Comparison response did not include ranking rows.
-                              </p>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <div className="grid gap-3 md:grid-cols-3">
-                          {sortedCompareRows.slice(0, 3).map((row, index) => (
-                            <SummaryCard
-                              key={`${row.model_path ?? row.model_name ?? index}-${index}`}
-                              label={`Top ${index + 1}`}
-                              value={getRowDisplayLabel(row)}
-                              description={String(row[compareSortKey || '_rank'] ?? '')}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <Card>
-                        <CardContent className="p-6 text-sm text-muted-foreground">
-                          Run a comparison to see ranking results and the best model summary here.
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
