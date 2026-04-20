@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Info } from 'lucide-react'
+import { Info, Hash, Shuffle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -360,164 +360,138 @@ function SummaryCard({ label, value, description }) {
         <p className="text-lg font-semibold">{formatDisplayValue(value)}</p>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </CardContent>
-    </Card>
-  )
-}
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        handleGenerateSyntheticData()
+                      }}
+                      className="flex w-full flex-wrap items-center justify-end gap-3 rounded-2xl border bg-muted/20 p-3 lg:max-w-5xl">
+                      <InputGroup className="w-full sm:w-[18rem]">
+                        <InputGroupAddon align="inline-start">
+                          <Hash className="size-4" />
+                          <span className="ml-2 whitespace-nowrap">Batch</span>
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          id="synthetic-count"
+                          type="number"
+                          min="1"
+                          value={syntheticForm.count}
+                          onChange={(event) => updateSyntheticField('count', event.target.value)}
+                          className="h-14 px-4 text-2xl font-semibold"
+                        />
+                      </InputGroup>
 
-function App() {
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY)
-    return savedTheme === 'light' ? 'light' : 'dark'
-  })
+                      <InputGroup className="w-full sm:w-[18rem]">
+                        <InputGroupAddon align="inline-start">
+                          <Shuffle className="size-4" />
+                          <span className="ml-2 whitespace-nowrap">Seed</span>
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          id="synthetic-random-state"
+                          type="number"
+                          value={syntheticForm.random_state}
+                          onChange={(event) => updateSyntheticField('random_state', event.target.value)}
+                          className="h-14 px-4 text-2xl font-semibold"
+                        />
+                      </InputGroup>
 
-  const [health, setHealth] = useState({ status: 'checking', error: '' })
+                      <InputGroup className="w-full sm:w-[24rem]">
+                        <InputGroupAddon align="inline-start">
+                          <span className="whitespace-nowrap">Target</span>
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          readOnly
+                          value={
+                            syntheticForm.include_target
+                              ? 'Include when available'
+                              : 'Exclude target'
+                          }
+                          className="h-14 px-4 text-base"
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton
+                            type="button"
+                            variant={syntheticForm.include_target ? 'secondary' : 'outline'}
+                            onClick={() =>
+                              updateSyntheticField('include_target', !syntheticForm.include_target)
+                            }
+                            className="h-14 px-5 text-sm font-medium">
+                            Toggle
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
 
-  const [modelsCatalog, setModelsCatalog] = useState({
-    default_model_path: '',
-    model_count: 0,
-    models: [],
-  })
-  const [modelsLoading, setModelsLoading] = useState(false)
-  const [modelsError, setModelsError] = useState('')
-  const [selectedModelPath, setSelectedModelPath] = useState('')
-  const [selectedModelDetails, setSelectedModelDetails] = useState(null)
-  const [selectedModelLoading, setSelectedModelLoading] = useState(false)
-  const [selectedModelError, setSelectedModelError] = useState('')
+                      <InputGroupButton
+                        type="submit"
+                        disabled={syntheticLoading}
+                        className="h-14 min-w-[11rem] rounded-2xl bg-lime-500 px-6 text-xl font-medium text-black hover:bg-lime-400 disabled:bg-lime-500/70">
+                        {syntheticLoading ? 'Generating...' : 'Generate'}
+                      </InputGroupButton>
+                    </form>
+                  </div>
 
-  const [trainForm, setTrainForm] = useState(TRAIN_DEFAULTS)
-  const [trainLoading, setTrainLoading] = useState(false)
-  const [trainError, setTrainError] = useState('')
-  const [trainResult, setTrainResult] = useState(null)
-  const [brokenImages, setBrokenImages] = useState({})
+                  {syntheticError ? (
+                    <Alert variant="destructive">
+                      <AlertTitle>Synthetic Data Failed</AlertTitle>
+                      <AlertDescription>{syntheticError}</AlertDescription>
+                    </Alert>
+                  ) : null}
 
-  const [syntheticForm, setSyntheticForm] = useState({
-    count: '10',
-    random_state: '42',
-    include_target: true,
-  })
-  const [syntheticLoading, setSyntheticLoading] = useState(false)
-  const [syntheticError, setSyntheticError] = useState('')
-  const [syntheticResult, setSyntheticResult] = useState(null)
+                  {syntheticLoading ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {Array.from({ length: 2 }).map((_, index) => (
+                        <Skeleton key={index} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : syntheticResult ? (
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <span className="font-medium text-foreground">Requested:</span>{' '}
+                          {syntheticResult.requested_count ?? '--'}
+                        </div>
+                        <div>
+                          <span className="font-medium text-foreground">Generated:</span>{' '}
+                          {syntheticResult.actual_count ?? '--'}
+                        </div>
+                      </div>
+                      <ScrollArea className="max-h-40 rounded-md border">
+                        <pre className="whitespace-pre-wrap wrap-break-word p-3 text-xs">
+                          {safeJsonStringify(syntheticResult.records) || 'No records returned.'}
+                        </pre>
+                      </ScrollArea>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Fill batch and seed, then generate records for prediction.
+                    </p>
+                  )}
 
-  const [datasetPage, setDatasetPage] = useState(1)
-  const [datasetPageSize, setDatasetPageSize] = useState('20')
-  const [datasetLoading, setDatasetLoading] = useState(false)
-  const [datasetError, setDatasetError] = useState('')
-  const [datasetResult, setDatasetResult] = useState(null)
+                  <div className="space-y-2">
+                    <Label htmlFor="predict-json">Records JSON</Label>
+                    <Textarea
+                      id="predict-json"
+                      value={predictInput}
+                      onChange={(event) => setPredictInput(event.target.value)}
+                      className="min-h-56 font-mono text-sm"
+                    />
+                  </div>
 
-  const [predictInput, setPredictInput] = useState('')
-  const [predictLoading, setPredictLoading] = useState(false)
-  const [predictError, setPredictError] = useState('')
-  const [predictResult, setPredictResult] = useState(null)
+                  <div className="flex justify-end">
+                    <Button onClick={handlePredict} disabled={predictLoading}>
+                      {predictLoading ? 'Running...' : 'Run Prediction'}
+                    </Button>
+                  </div>
 
-  const [reportLoading, setReportLoading] = useState(false)
-  const [reportError, setReportError] = useState('')
-  const [reportResult, setReportResult] = useState(null)
-  const [viewerGraph, setViewerGraph] = useState(null)
-  const [datasetInfoOpen, setDatasetInfoOpen] = useState(false)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const isDark = theme === 'dark'
-    root.classList.toggle('dark', isDark)
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
-  }, [theme])
-
-  useEffect(() => {
-    async function loadModels() {
-      setModelsLoading(true)
-      setModelsError('')
-
-      try {
-        const response = await fetchModels()
-        const normalizedModels = Array.isArray(response?.models)
-          ? response.models.map(normalizeModelEntry).filter(Boolean)
-          : []
-
-        setModelsCatalog({
-          default_model_path: response?.default_model_path ?? '',
-          model_count: response?.model_count ?? normalizedModels.length,
-          models: normalizedModels,
-        })
-      } catch (error) {
-        setModelsError(error.message)
-      } finally {
-        setModelsLoading(false)
-      }
-    }
-
-    loadModels()
-  }, [])
-
-  useEffect(() => {
-    const activeModelPath = selectedModelPath
-
-    if (!activeModelPath) {
-      setSelectedModelDetails(null)
-      return
-    }
-
-    let cancelled = false
-
-    async function loadModelDetails() {
-      setSelectedModelLoading(true)
-      setSelectedModelError('')
-
-      try {
-        const response = await fetchModelDetails(activeModelPath)
-        if (cancelled) {
-          return
-        }
-        setSelectedModelDetails(normalizeModelEntry(response))
-      } catch (error) {
-        if (!cancelled) {
-          setSelectedModelError(error.message)
-          setSelectedModelDetails(null)
-        }
-      } finally {
-        if (!cancelled) {
-          setSelectedModelLoading(false)
-        }
-      }
-    }
-
-    loadModelDetails()
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedModelPath])
-
-  useEffect(() => {
-    async function checkHealth() {
-      try {
-        const response = await fetchHealth()
-        setHealth({ status: response?.status ?? 'unknown', error: '' })
-      } catch (error) {
-        setHealth({ status: 'down', error: error.message })
-      }
-    }
-
-    checkHealth()
-  }, [])
-
-  useEffect(() => {
-    handleFetchDataset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetPage, datasetPageSize])
-
-  const trainMetrics = useMemo(() => getTrainingMetrics(trainResult), [trainResult])
-  const trainGraphs = useMemo(() => toGraphList(trainResult), [trainResult])
-
-  const activeModelPath = selectedModelPath
-  const hasAnyModel = modelsCatalog.models.length > 0
-
-  const activeModel = useMemo(() => {
-    const fromList = modelsCatalog.models.find((model) => model.model_path === activeModelPath)
-    return selectedModelDetails ?? fromList ?? null
-  }, [activeModelPath, modelsCatalog.models, selectedModelDetails])
-
-  const reportMetrics = reportResult?.metrics ?? {}
+                  {predictError ? (
+                    <Alert variant="destructive">
+                      <AlertTitle>Prediction Failed</AlertTitle>
+                      <AlertDescription>{predictError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+                </div>
   const reportPlots =
     reportResult?.plot_urls && typeof reportResult.plot_urls === 'object'
       ? Object.entries(reportResult.plot_urls)
