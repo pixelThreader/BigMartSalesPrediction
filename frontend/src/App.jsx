@@ -32,7 +32,12 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
@@ -60,7 +65,8 @@ const TRAIN_DEFAULTS = {
 
 const METRIC_KEYS = ['mae', 'mse', 'rmse', 'r2', 'mape']
 const THEME_STORAGE_KEY = 'dashboard-theme'
-const DEFAULT_MODEL_VALUE = '__default__'
+const NO_MODELS_VALUE = '__no_models__'
+const NO_MODELS_MESSAGE = 'No models trained yet. Train one to start prediction.'
 const DATASET_SOURCE_URL = 'https://www.kaggle.com/datasets/yasserh/bigmartsalesdataset'
 const DATASET_COLUMN_INFO = [
   {
@@ -269,6 +275,18 @@ function getModelDisplayName(model) {
   return model?.model_name || model?.model_stem || model?.model_path || 'Model'
 }
 
+function isModelNotFoundMessage(message) {
+  if (!message || typeof message !== 'string') {
+    return false
+  }
+
+  return /model\s+file\s+not\s+found/i.test(message)
+}
+
+function normalizeModelUiMessage(message) {
+  return isModelNotFoundMessage(message) ? NO_MODELS_MESSAGE : message
+}
+
 function safeJsonStringify(value) {
   try {
     return JSON.stringify(value, null, 2)
@@ -432,7 +450,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const activeModelPath = selectedModelPath || modelsCatalog.default_model_path
+    const activeModelPath = selectedModelPath
 
     if (!activeModelPath) {
       setSelectedModelDetails(null)
@@ -468,7 +486,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [selectedModelPath, modelsCatalog.default_model_path])
+  }, [selectedModelPath])
 
   useEffect(() => {
     async function checkHealth() {
@@ -491,7 +509,9 @@ function App() {
   const trainMetrics = useMemo(() => getTrainingMetrics(trainResult), [trainResult])
   const trainGraphs = useMemo(() => toGraphList(trainResult), [trainResult])
 
-  const activeModelPath = selectedModelPath || modelsCatalog.default_model_path
+  const activeModelPath = selectedModelPath
+  const hasAnyModel = modelsCatalog.models.length > 0
+
   const activeModel = useMemo(() => {
     const fromList = modelsCatalog.models.find((model) => model.model_path === activeModelPath)
     return selectedModelDetails ?? fromList ?? null
@@ -568,7 +588,7 @@ function App() {
       )
       setPredictResult(response)
     } catch (error) {
-      setPredictError(error.message)
+      setPredictError(normalizeModelUiMessage(error.message))
     } finally {
       setPredictLoading(false)
     }
@@ -636,10 +656,10 @@ function App() {
         <section className="flex flex-col gap-3 rounded-xl border bg-card/80 p-4 shadow-sm md:flex-row md:items-center md:justify-between md:p-6">
           <div>
             <h1 className="font-heading text-2xl font-semibold tracking-tight md:text-3xl">
-              FastAPI Model Dashboard
+              Big Mart Sales Dashboard
             </h1>
             <p className="text-sm text-muted-foreground">
-              Train, inspect artifacts, browse data, and run predictions from one place.
+              Train, inspect models, browse data, and run predictions from one place.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -955,40 +975,40 @@ function App() {
             <Card>
               <CardHeader>
                 <CardTitle>Prediction Model</CardTitle>
-                <CardDescription>
-                  Leave the selector on the default option to use the backend default model.
-                </CardDescription>
+                <CardDescription>Select a trained model to start prediction.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
                   <div className="space-y-2">
                     <Label htmlFor="prediction-model">Model</Label>
                     <Select
-                      value={selectedModelPath || DEFAULT_MODEL_VALUE}
-                      onValueChange={(value) =>
-                        setSelectedModelPath(value === DEFAULT_MODEL_VALUE ? '' : value)
-                      }
-                      disabled={modelsLoading}>
+                      value={selectedModelPath || undefined}
+                      onValueChange={(value) => setSelectedModelPath(value)}
+                      disabled={modelsLoading || !hasAnyModel}>
                       <SelectTrigger id="prediction-model">
-                        <SelectValue placeholder="Default model" />
+                        <SelectValue placeholder={hasAnyModel ? 'Select a model' : 'No models'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={DEFAULT_MODEL_VALUE}>Default model</SelectItem>
-                        {modelsCatalog.models.map((model) => (
-                          <SelectItem key={model.model_path} value={model.model_path}>
-                            {getModelDisplayName(model)}
+                        {hasAnyModel ? (
+                          modelsCatalog.models.map((model) => (
+                            <SelectItem key={model.model_path} value={model.model_path}>
+                              {getModelDisplayName(model)}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value={NO_MODELS_VALUE} disabled>
+                            No models
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                      <Badge variant="outline">
-                        {selectedModelPath ? 'Custom model active' : 'Using backend default model'}
-                      </Badge>
-                      <span>
-                        Active path:{' '}
-                        <PathValue value={activeModelPath || modelsCatalog.default_model_path} />
-                      </span>
+                      {selectedModelPath ? <Badge variant="outline">Custom model active</Badge> : null}
+                      {activeModelPath ? (
+                        <span>
+                          Active path: <PathValue value={activeModelPath} />
+                        </span>
+                      ) : null}
                     </div>
                     {modelsError ? (
                       <Alert variant="destructive">
@@ -998,12 +1018,7 @@ function App() {
                     ) : null}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <SummaryCard
-                      label="Default Model"
-                      value={<PathValue value={modelsCatalog.default_model_path} />}
-                      description="Used when no custom model is selected"
-                    />
+                  <div className="grid gap-3 sm:grid-cols-1">
                     <SummaryCard
                       label="Available Models"
                       value={modelsCatalog.model_count}
@@ -1029,15 +1044,14 @@ function App() {
                     ))}
                   </div>
                 ) : selectedModelError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Model Details Failed</AlertTitle>
-                    <AlertDescription>{selectedModelError}</AlertDescription>
+                  <Alert>
+                    <AlertTitle>Model Unavailable</AlertTitle>
+                    <AlertDescription>{normalizeModelUiMessage(selectedModelError)}</AlertDescription>
                   </Alert>
                 ) : activeModel ? (
                   <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       <SummaryCard label="Model Name" value={getModelDisplayName(activeModel)} />
-                      <SummaryCard label="Model Stem" value={activeModel.model_stem || '--'} />
                       <SummaryCard label="Size" value={formatBytes(activeModel.size_bytes)} />
                       <SummaryCard label="Has Report" value={activeModel.has_report ? 'Yes' : 'No'} />
                     </div>
@@ -1118,7 +1132,11 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Select a model to view details.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {hasAnyModel
+                      ? 'Select a model to view details.'
+                      : 'No models available yet, please train one to use that.'}
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -1132,35 +1150,146 @@ function App() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">
-                    Prediction mode: {selectedModelPath ? 'Custom model' : 'Default model'}
-                  </Badge>
+                  <Badge variant="outline">Prediction mode: {selectedModelPath ? 'Custom model' : 'None selected'}</Badge>
                   {selectedModelPath ? (
                     <Badge variant="secondary">{getModelDisplayName(activeModel)}</Badge>
                   ) : null}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="predict-json">Records JSON</Label>
-                  <Textarea
-                    id="predict-json"
-                    value={predictInput}
-                    onChange={(event) => setPredictInput(event.target.value)}
-                    className="min-h-56 font-mono text-sm"
-                  />
-                </div>
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-start">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="predict-json">Records JSON</Label>
+                      <Textarea
+                        id="predict-json"
+                        value={predictInput}
+                        onChange={(event) => setPredictInput(event.target.value)}
+                        className="min-h-56 font-mono text-sm"
+                      />
+                    </div>
 
-                <div className="flex justify-end">
-                  <Button onClick={handlePredict} disabled={predictLoading}>
-                    {predictLoading ? 'Running...' : 'Run Prediction'}
-                  </Button>
-                </div>
+                    <div className="flex justify-end">
+                      <Button onClick={handlePredict} disabled={predictLoading}>
+                        {predictLoading ? 'Running...' : 'Run Prediction'}
+                      </Button>
+                    </div>
 
-                {predictError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Prediction Failed</AlertTitle>
-                    <AlertDescription>{predictError}</AlertDescription>
-                  </Alert>
-                ) : null}
+                    {predictError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>Prediction Failed</AlertTitle>
+                        <AlertDescription>{predictError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div>
+                      <p className="text-sm font-medium">Synthetic Data Generator</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generate records and auto-fill the prediction editor.
+                      </p>
+                    </div>
+
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        handleGenerateSyntheticData()
+                      }}
+                      className="space-y-3">
+                      <InputGroup>
+                        <InputGroupInput
+                          id="synthetic-count"
+                          type="number"
+                          min="1"
+                          placeholder="Batch row count"
+                          value={syntheticForm.count}
+                          onChange={(event) => updateSyntheticField('count', event.target.value)}
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton type="button" variant="secondary" disabled>
+                            Batch
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
+
+                      <InputGroup>
+                        <InputGroupInput
+                          id="synthetic-random-state"
+                          type="number"
+                          placeholder="Random state"
+                          value={syntheticForm.random_state}
+                          onChange={(event) => updateSyntheticField('random_state', event.target.value)}
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton type="button" variant="secondary" disabled>
+                            Seed
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
+
+                      <InputGroup>
+                        <InputGroupInput
+                          readOnly
+                          value={
+                            syntheticForm.include_target
+                              ? 'Include target column when available'
+                              : 'Do not include target column'
+                          }
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton
+                            type="button"
+                            variant={syntheticForm.include_target ? 'secondary' : 'outline'}
+                            onClick={() =>
+                              updateSyntheticField('include_target', !syntheticForm.include_target)
+                            }>
+                            Toggle target
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      </InputGroup>
+
+                      <Button type="submit" className="w-full" disabled={syntheticLoading}>
+                        {syntheticLoading ? 'Generating...' : 'Generate Synthetic Data'}
+                      </Button>
+                    </form>
+
+                    {syntheticError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>Synthetic Data Failed</AlertTitle>
+                        <AlertDescription>{syntheticError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+
+                    {syntheticLoading ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {Array.from({ length: 2 }).map((_, index) => (
+                          <Skeleton key={index} className="h-16 w-full" />
+                        ))}
+                      </div>
+                    ) : syntheticResult ? (
+                      <div className="space-y-2 text-xs text-muted-foreground">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <span className="font-medium text-foreground">Requested:</span>{' '}
+                            {syntheticResult.requested_count ?? '--'}
+                          </div>
+                          <div>
+                            <span className="font-medium text-foreground">Generated:</span>{' '}
+                            {syntheticResult.actual_count ?? '--'}
+                          </div>
+                        </div>
+                        <ScrollArea className="max-h-40 rounded-md border">
+                          <pre className="whitespace-pre-wrap wrap-break-word p-3 text-xs">
+                            {safeJsonStringify(syntheticResult.records) || 'No records returned.'}
+                          </pre>
+                        </ScrollArea>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Fill batch and seed, then generate records for prediction.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -1207,109 +1336,6 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Synthetic Data Generator</CardTitle>
-                <CardDescription>
-                  Generate prediction-ready records and inject them into the prediction editor.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <form onSubmit={(event) => { event.preventDefault(); handleGenerateSyntheticData() }} className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="synthetic-count">Row Count</Label>
-                    <Input
-                      id="synthetic-count"
-                      type="number"
-                      min="1"
-                      value={syntheticForm.count}
-                      onChange={(event) => updateSyntheticField('count', event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="synthetic-random-state">Random State</Label>
-                    <Input
-                      id="synthetic-random-state"
-                      type="number"
-                      value={syntheticForm.random_state}
-                      onChange={(event) => updateSyntheticField('random_state', event.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <Checkbox
-                      id="include-target"
-                      checked={syntheticForm.include_target}
-                      onCheckedChange={(checked) => updateSyntheticField('include_target', checked === true)}
-                    />
-                    <Label htmlFor="include-target">Include target column when available</Label>
-                  </div>
-                  <div className="md:col-span-2 flex justify-end">
-                    <Button type="submit" disabled={syntheticLoading}>
-                      {syntheticLoading ? 'Generating...' : 'Generate Synthetic Data'}
-                    </Button>
-                  </div>
-                </form>
-
-                {syntheticError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Synthetic Data Failed</AlertTitle>
-                    <AlertDescription>{syntheticError}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                {syntheticLoading ? (
-                  <div className="grid gap-3 md:grid-cols-4">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                      <Skeleton key={index} className="h-20 w-full" />
-                    ))}
-                  </div>
-                ) : syntheticResult ? (
-                  <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <SummaryCard label="Requested Count" value={syntheticResult.requested_count ?? '--'} />
-                      <SummaryCard label="Actual Count" value={syntheticResult.actual_count ?? '--'} />
-                      <SummaryCard
-                        label="Sample With Replacement"
-                        value={syntheticResult.sample_with_replacement ? 'Yes' : 'No'}
-                      />
-                      <SummaryCard label="Source Rows" value={syntheticResult.source_rows} />
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div>
-                        <span className="font-medium text-foreground">Dataset Path: </span>
-                        <PathValue value={syntheticResult.dataset_path} />
-                      </div>
-                      <div>
-                        <span className="font-medium text-foreground">Targets: </span>
-                        {formatDisplayValue(syntheticResult.targets)}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Required Features</div>
-                      <div className="flex flex-wrap gap-2">
-                        {(syntheticResult.required_features ?? []).map((feature) => (
-                          <Badge key={feature} variant="outline">
-                            {feature}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Generated Records</div>
-                      <ScrollArea className="max-h-64 rounded-md border">
-                        <pre className="whitespace-pre-wrap wrap-break-word p-4 text-xs">
-                          {safeJsonStringify(syntheticResult.records) || 'No records returned.'}
-                        </pre>
-                      </ScrollArea>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Generate synthetic records to auto-fill the prediction editor.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="report" className="mt-4 space-y-4">
