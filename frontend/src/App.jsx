@@ -484,7 +484,7 @@ function App() {
 
   useEffect(() => {
     const plots = toGraphList(reportResult)
-    const reportMetricsData = getTrainingMetrics(reportResult)
+    const reportMetricsData = reportResult?.metrics ?? getTrainingMetrics(reportResult)
     setReportMetrics(reportMetricsData)
   }, [reportResult])
 

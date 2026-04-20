@@ -362,13 +362,23 @@ def get_latest_report() -> dict[str, Any]:
         key: _to_artifact_url(value) for key, value in payload.get("plots", {}).items()
     }
 
+    metrics = {
+        "mae": payload.get("mae"),
+        "mse": payload.get("mse"),
+        "rmse": payload.get("rmse"),
+        "r2": payload.get("r2"),
+        "mape": payload.get("mape"),
+    }
+
     return {
         "metrics_file": str(metrics_path),
         "model_path": payload.get("model_path"),
         "dataset_path": payload.get("dataset_path"),
         "test_size": payload.get("test_size"),
         "random_state": payload.get("random_state"),
-        "metrics": payload.get("metrics", {}),
+        "target_column": payload.get("target_column"),
+        "feature_columns": payload.get("feature_columns", []),
+        "metrics": metrics,
         "plots": payload.get("plots", {}),
         "plot_urls": plot_urls,
     }

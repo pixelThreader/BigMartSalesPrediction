@@ -183,6 +183,7 @@ def train_and_save_model(
         "target_column": TARGET,
         "feature_columns": list(x_data.columns),
         "plots": plot_paths,
+        **metrics,
     }
     metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {
