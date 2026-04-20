@@ -373,37 +373,37 @@ function App() {
   const [trainError, setTrainError] = useState('')
   const [trainMetrics, setTrainMetrics] = useState(null)
   const [trainGraphs, setTrainGraphs] = useState([])
-  
+
   const [datasetPage, setDatasetPage] = useState(1)
   const [datasetPageSize, setDatasetPageSize] = useState('20')
   const [datasetResult, setDatasetResult] = useState(null)
   const [datasetLoading, setDatasetLoading] = useState(false)
   const [datasetError, setDatasetError] = useState('')
-  
+
   const [selectedModelPath, setSelectedModelPath] = useState('')
   const [selectedModelDetails, setSelectedModelDetails] = useState(null)
   const [selectedModelLoading, setSelectedModelLoading] = useState(false)
   const [selectedModelError, setSelectedModelError] = useState('')
-  
+
   const [modelsCatalog, setModelsCatalog] = useState({ models: [], model_count: 0 })
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState('')
-  
+
   const [predictInput, setPredictInput] = useState('')
   const [predictResult, setPredictResult] = useState(null)
   const [predictLoading, setPredictLoading] = useState(false)
   const [predictError, setPredictError] = useState('')
-  
-  const [syntheticForm, setSyntheticForm] = useState({ count: '', random_state: '', include_target: false })
+
+  const [syntheticForm, setSyntheticForm] = useState({ count: '10', random_state: '42', include_target: false })
   const [syntheticResult, setSyntheticResult] = useState(null)
   const [syntheticLoading, setSyntheticLoading] = useState(false)
   const [syntheticError, setSyntheticError] = useState('')
-  
+
   const [reportResult, setReportResult] = useState(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState('')
   const [reportMetrics, setReportMetrics] = useState(null)
-  
+
   const [brokenImages, setBrokenImages] = useState({})
   const [viewerGraph, setViewerGraph] = useState(null)
   const [datasetInfoOpen, setDatasetInfoOpen] = useState(false)
@@ -1118,10 +1118,61 @@ function App() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Predict</CardTitle>
-                <CardDescription>
-                  Paste a JSON object for one record or a JSON array for batch inference.
-                </CardDescription>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle>Predict</CardTitle>
+                    <CardDescription>
+                      Paste a JSON object for one record or a JSON array for batch inference.
+                    </CardDescription>
+                  </div>
+
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      handleGenerateSyntheticData()
+                    }}
+                    className="flex items-end gap-2 max-w-md">
+                    <InputGroup>
+                      <InputGroupInput
+                        id="synthetic-count"
+                        type="number"
+                        min="1"
+                        placeholder="10"
+                        value={syntheticForm.count}
+                        onChange={(event) => updateSyntheticField('count', event.target.value)}
+                        className="w-20 text-sm text-center"
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupButton type="button" variant="secondary" disabled>
+                          Batch
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
+
+                    <InputGroup>
+                      <InputGroupInput
+                        id="synthetic-random-state"
+                        type="number"
+                        placeholder="42"
+                        value={syntheticForm.random_state}
+                        onChange={(event) => updateSyntheticField('random_state', event.target.value)}
+                        className=" w-20 text-sm text-center"
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupButton type="button" variant="secondary" disabled>
+                          Seed
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
+
+                    <Button
+                      type="submit"
+                      disabled={syntheticLoading}
+                      className="h-8 px-3 rounded-lg bg-primary text-sm font-semibold">
+                      {syntheticLoading ? 'Gen...' : 'Generate'}
+                    </Button>
+                  </form>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1130,122 +1181,44 @@ function App() {
                     <Badge variant="secondary">{getModelDisplayName(activeModel)}</Badge>
                   ) : null}
                 </div>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-start">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="predict-json">Records JSON</Label>
-                      <Textarea
-                        id="predict-json"
-                        value={predictInput}
-                        onChange={(event) => setPredictInput(event.target.value)}
-                        className="min-h-56 font-mono text-sm"
-                      />
-                    </div>
 
-                    <div className="flex justify-end">
-                      <Button onClick={handlePredict} disabled={predictLoading}>
-                        {predictLoading ? 'Running...' : 'Run Prediction'}
-                      </Button>
-                    </div>
-
-                    {predictError ? (
-                      <Alert variant="destructive">
-                        <AlertTitle>Prediction Failed</AlertTitle>
-                        <AlertDescription>{predictError}</AlertDescription>
-                      </Alert>
-                    ) : null}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="predict-json">Records JSON</Label>
+                    <Textarea
+                      id="predict-json"
+                      value={predictInput}
+                      onChange={(event) => setPredictInput(event.target.value)}
+                      className="min-h-56 font-mono text-sm"
+                    />
                   </div>
 
-                  <div className="space-y-3 rounded-lg border p-4">
-                    <div>
-                      <p className="text-sm font-medium">Synthetic Data Generator</p>
-                      <p className="text-xs text-muted-foreground">
-                        Generate records and auto-fill the prediction editor.
-                      </p>
-                    </div>
-
-                    <form
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        handleGenerateSyntheticData()
-                      }}
-                      className="flex flex-wrap items-end gap-2">
-                      <div className="flex-1 min-w-40">
-                        <Label htmlFor="synthetic-count" className="text-xs mb-1 block">
-                          <Hash className="inline size-3 mr-1 align-text-bottom" />
-                          Batch
-                        </Label>
-                        <InputGroupInput
-                          id="synthetic-count"
-                          type="number"
-                          min="1"
-                          placeholder="10"
-                          value={syntheticForm.count}
-                          onChange={(event) => updateSyntheticField('count', event.target.value)}
-                          className="h-10 text-center text-lg font-semibold"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-40">
-                        <Label htmlFor="synthetic-random-state" className="text-xs mb-1 block">
-                          <Shuffle className="inline size-3 mr-1 align-text-bottom" />
-                          Seed
-                        </Label>
-                        <InputGroupInput
-                          id="synthetic-random-state"
-                          type="number"
-                          placeholder="42"
-                          value={syntheticForm.random_state}
-                          onChange={(event) => updateSyntheticField('random_state', event.target.value)}
-                          className="h-10 text-center text-lg font-semibold"
-                        />
-                      </div>
-
-                      <Button 
-                        type="submit" 
-                        disabled={syntheticLoading}
-                        className="h-10 min-w-32 rounded-lg bg-lime-500 px-4 text-base font-semibold text-black hover:bg-lime-400 disabled:bg-lime-500/70">
-                        {syntheticLoading ? 'Generating...' : 'Generate'}
-                      </Button>
-                    </form>
-
-                    {syntheticError ? (
-                      <Alert variant="destructive">
-                        <AlertTitle>Synthetic Data Failed</AlertTitle>
-                        <AlertDescription>{syntheticError}</AlertDescription>
-                      </Alert>
-                    ) : null}
-
-                    {syntheticLoading ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {Array.from({ length: 2 }).map((_, index) => (
-                          <Skeleton key={index} className="h-16 w-full" />
-                        ))}
-                      </div>
-                    ) : syntheticResult ? (
-                      <div className="space-y-2 text-xs text-muted-foreground">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <span className="font-medium text-foreground">Requested:</span>{' '}
-                            {syntheticResult.requested_count ?? '--'}
-                          </div>
-                          <div>
-                            <span className="font-medium text-foreground">Generated:</span>{' '}
-                            {syntheticResult.actual_count ?? '--'}
-                          </div>
-                        </div>
-                        <ScrollArea className="max-h-40 rounded-md border">
-                          <pre className="whitespace-pre-wrap wrap-break-word p-3 text-xs">
-                            {safeJsonStringify(syntheticResult.records) || 'No records returned.'}
-                          </pre>
-                        </ScrollArea>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Fill batch and seed, then generate records for prediction.
-                      </p>
-                    )}
+                  <div className="flex justify-end">
+                    <Button onClick={handlePredict} disabled={predictLoading}>
+                      {predictLoading ? 'Running...' : 'Run Prediction'}
+                    </Button>
                   </div>
+
+                  {predictError ? (
+                    <Alert variant="destructive">
+                      <AlertTitle>Prediction Failed</AlertTitle>
+                      <AlertDescription>{predictError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  {syntheticError ? (
+                    <Alert variant="destructive">
+                      <AlertTitle>Synthetic Data Failed</AlertTitle>
+                      <AlertDescription>{syntheticError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  {syntheticResult ? (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Requested:</span> {syntheticResult.requested_count ?? '--'} |
+                      <span className="font-medium text-foreground ml-2">Generated:</span> {syntheticResult.actual_count ?? '--'}
+                    </div>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

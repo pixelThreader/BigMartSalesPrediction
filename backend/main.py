@@ -16,19 +16,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pydantic import Field
 
-from model.model_service import DEFAULT_DATASET_PATH
-from model.model_service import DEFAULT_MODEL_PATH
-from model.model_service import FEATURES
-from model.model_service import MODEL_DIR
-from model.model_service import REPORTS_DIR
-from model.model_service import compare_models
-from model.model_service import generate_synthetic_dataset
-from model.model_service import get_model_details
-from model.model_service import get_trainable_columns
-from model.model_service import list_available_models
-from model.model_service import load_model
-from model.model_service import predict_records
-from model.model_service import train_and_save_model
+from model import DEFAULT_DATASET_PATH
+from model import DEFAULT_MODEL_PATH
+from model import FEATURES
+from model import MODEL_DIR
+from model import REPORTS_DIR
+from model import compare_models
+from model import generate_synthetic_dataset
+from model import get_model_details
+from model import get_trainable_columns
+from model import list_available_models
+from model import load_model
+from model import predict_records
+from model import train_and_save_model
 
 
 TEMP_EXPORTS_DIR = MODEL_DIR / "temp_exports"
