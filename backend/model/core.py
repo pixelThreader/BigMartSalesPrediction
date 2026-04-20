@@ -48,6 +48,63 @@ CATEGORICAL_FEATURES = [
 ]
 
 
+def _resolve_dataset_path(dataset_path: str | Path) -> Path:
+    resolved_dataset_path = Path(dataset_path)
+    if not resolved_dataset_path.exists():
+        raise FileNotFoundError(f"Dataset file not found at {resolved_dataset_path}")
+    return resolved_dataset_path
+
+
+def _read_dataset(dataset_path: str | Path) -> pd.DataFrame:
+    return pd.read_csv(_resolve_dataset_path(dataset_path))
+
+
+def _build_feature_frame(
+    df: pd.DataFrame, feature_columns: Sequence[str], target_column: str = TARGET
+) -> pd.DataFrame:
+    if target_column in feature_columns:
+        raise ValueError(f"{target_column} cannot be included in feature_columns")
+    _validate_columns(df, list(feature_columns) + [target_column])
+    return df.loc[:, list(feature_columns)].copy()
+
+
+def get_trainable_columns(
+    dataset_path: str | Path = DEFAULT_DATASET_PATH,
+    target_column: str = TARGET,
+) -> dict[str, Any]:
+    df = _read_dataset(dataset_path)
+    if target_column not in df.columns:
+        raise ValueError(f"Missing target column: {target_column}")
+
+    all_input_columns = [column for column in df.columns if column != target_column]
+    trainable_columns = [
+        column
+        for column in all_input_columns
+        if pd.api.types.is_numeric_dtype(df[column])
+    ]
+
+    column_details: list[dict[str, Any]] = []
+    for column in all_input_columns:
+        column_details.append(
+            {
+                "name": column,
+                "dtype": str(df[column].dtype),
+                "is_numeric": pd.api.types.is_numeric_dtype(df[column]),
+                "missing_values": int(df[column].isna().sum()),
+                "unique_values": int(df[column].nunique(dropna=True)),
+            }
+        )
+
+    return {
+        "dataset_path": str(_resolve_dataset_path(dataset_path)),
+        "target_column": target_column,
+        "trainable_columns": trainable_columns,
+        "all_input_columns": all_input_columns,
+        "default_feature_columns": FEATURES,
+        "column_details": column_details,
+    }
+
+
 def _validate_columns(df: pd.DataFrame, required_columns: list[str]) -> None:
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
@@ -107,6 +164,14 @@ def get_model_details(model_path: str | Path = DEFAULT_MODEL_PATH) -> dict[str, 
     metrics_payload = _read_metrics_payload(resolved_model_path)
     file_stat = resolved_model_path.stat()
 
+    feature_columns = list(metrics_payload.get("feature_columns", FEATURES)) if metrics_payload else list(FEATURES)
+    numeric_feature_columns = (
+        list(metrics_payload.get("numeric_feature_columns", [])) if metrics_payload else []
+    )
+    categorical_feature_columns = (
+        list(metrics_payload.get("categorical_feature_columns", [])) if metrics_payload else []
+    )
+
     model_details: dict[str, Any] = {
         "model_path": str(resolved_model_path),
         "model_name": resolved_model_path.name,
@@ -122,7 +187,10 @@ def get_model_details(model_path: str | Path = DEFAULT_MODEL_PATH) -> dict[str, 
         "random_state": None,
         "metrics": {},
         "plots": {},
-        "feature_names": FEATURES,
+        "feature_names": feature_columns,
+        "feature_columns": feature_columns,
+        "numeric_feature_columns": numeric_feature_columns,
+        "categorical_feature_columns": categorical_feature_columns,
         "target": TARGET,
     }
 
@@ -154,13 +222,12 @@ def generate_synthetic_dataset(
     dataset_path: str | Path = DEFAULT_DATASET_PATH,
     random_state: int = 42,
     include_target: bool = False,
+    feature_columns: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    resolved_dataset_path = Path(dataset_path)
-    if not resolved_dataset_path.exists():
-        raise FileNotFoundError(f"Dataset file not found at {resolved_dataset_path}")
+    df = _read_dataset(dataset_path)
 
-    df = pd.read_csv(resolved_dataset_path)
-    required_columns = FEATURES + ([TARGET] if include_target else [])
+    selected_features = list(feature_columns) if feature_columns is not None else list(FEATURES)
+    required_columns = selected_features + ([TARGET] if include_target else [])
     _validate_columns(df, required_columns)
 
     sample_with_replacement = count > len(df)
@@ -171,16 +238,19 @@ def generate_synthetic_dataset(
     ).copy()
     sampled_df = sampled_df.where(pd.notnull(sampled_df), None)
 
-    feature_df = sampled_df.loc[:, FEATURES].copy()
+    source_columns = selected_features + ([TARGET] if include_target else [])
+    feature_df = sampled_df.loc[:, selected_features].copy()
+    source_df = sampled_df.loc[:, source_columns].copy()
 
     response: dict[str, Any] = {
-        "dataset_path": str(resolved_dataset_path),
+        "dataset_path": str(_resolve_dataset_path(dataset_path)),
         "requested_count": count,
         "actual_count": len(sampled_df),
         "sample_with_replacement": sample_with_replacement,
-        "required_features": FEATURES,
+        "required_features": selected_features,
+        "feature_columns": selected_features,
         "records": feature_df.to_dict(orient="records"),
-        "source_rows": sampled_df.to_dict(orient="records"),
+        "source_rows": source_df.to_dict(orient="records"),
     }
 
     if include_target and TARGET in sampled_df.columns:
@@ -402,8 +472,7 @@ def _save_performance_plots(
 def load_training_data(
     dataset_path: str | Path = DEFAULT_DATASET_PATH,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    data_path = Path(dataset_path)
-    df = pd.read_csv(data_path)
+    df = _read_dataset(dataset_path)
 
     required_columns = FEATURES + [TARGET]
     _validate_columns(df, required_columns)
@@ -413,13 +482,49 @@ def load_training_data(
     return x_data, y_data
 
 
+def load_training_data_with_columns(
+    dataset_path: str | Path = DEFAULT_DATASET_PATH,
+    feature_columns: Sequence[str] | None = None,
+    target_column: str = TARGET,
+) -> tuple[pd.DataFrame, pd.Series]:
+    df = _read_dataset(dataset_path)
+
+    selected_features = list(feature_columns) if feature_columns is not None else [
+        column
+        for column in df.columns
+        if column != target_column and pd.api.types.is_numeric_dtype(df[column])
+    ]
+    if not selected_features:
+        raise ValueError("feature_columns must contain at least one column")
+    if target_column in selected_features:
+        raise ValueError(f"{target_column} cannot be included in feature_columns")
+
+    non_numeric_features = [
+        column for column in selected_features if not pd.api.types.is_numeric_dtype(df[column])
+    ]
+    if non_numeric_features:
+        raise ValueError(
+            f"Only numeric feature columns are supported: {non_numeric_features}"
+        )
+
+    _validate_columns(df, selected_features + [target_column])
+
+    x_data = _build_feature_frame(df, selected_features, target_column=target_column)
+    y_data = df[target_column].copy()
+    return x_data, y_data
+
+
 def train_and_save_model(
     dataset_path: str | Path = DEFAULT_DATASET_PATH,
     model_path: str | Path = DEFAULT_MODEL_PATH,
+    feature_columns: Sequence[str] | None = None,
     test_size: float = 0.2,
     random_state: int = 42,
 ) -> dict[str, Any]:
-    x_data, y_data = load_training_data(dataset_path=dataset_path)
+    x_data, y_data = load_training_data_with_columns(
+        dataset_path=dataset_path,
+        feature_columns=feature_columns,
+    )
 
     x_train, x_val, y_train, y_val = train_test_split(
         x_data,
@@ -455,6 +560,8 @@ def train_and_save_model(
         "dataset_path": str(dataset_path),
         "test_size": test_size,
         "random_state": random_state,
+        "target_column": TARGET,
+        "feature_columns": list(x_data.columns),
         "metrics": metrics,
         "plots": plot_paths,
     }
@@ -479,6 +586,8 @@ def train_and_save_model(
         "model_path": str(output_path),
         "report_dir": str(run_reports_dir),
         "metrics_path": str(metrics_path),
+        "target_column": TARGET,
+        "feature_columns": list(x_data.columns),
         "plots": plot_paths,
     }
 
@@ -486,8 +595,13 @@ def train_and_save_model(
 def retrain_model(
     dataset_path: str | Path = DEFAULT_DATASET_PATH,
     model_path: str | Path = DEFAULT_MODEL_PATH,
+    feature_columns: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    return train_and_save_model(dataset_path=dataset_path, model_path=model_path)
+    return train_and_save_model(
+        dataset_path=dataset_path,
+        model_path=model_path,
+        feature_columns=feature_columns,
+    )
 
 
 def load_model(model_path: str | Path = DEFAULT_MODEL_PATH) -> Pipeline:
@@ -495,15 +609,29 @@ def load_model(model_path: str | Path = DEFAULT_MODEL_PATH) -> Pipeline:
     return joblib.load(load_path)
 
 
-def predict_dataframe(df: pd.DataFrame, model: Pipeline | None = None) -> np.ndarray:
-    _validate_columns(df, FEATURES)
+def get_model_feature_columns(model_path: str | Path = DEFAULT_MODEL_PATH) -> list[str]:
+    metrics_payload = _read_metrics_payload(model_path)
+    if metrics_payload and metrics_payload.get("feature_columns"):
+        return list(metrics_payload["feature_columns"])
+    return list(FEATURES)
+
+
+def predict_dataframe(
+    df: pd.DataFrame,
+    model: Pipeline | None = None,
+    feature_columns: Sequence[str] | None = None,
+) -> np.ndarray:
     inference_model = model if model is not None else load_model()
-    predictions = inference_model.predict(df[FEATURES])
+    required_features = list(feature_columns) if feature_columns is not None else list(FEATURES)
+    _validate_columns(df, required_features)
+    predictions = inference_model.predict(df[required_features])
     return cast(np.ndarray, predictions)
 
 
 def predict_records(
-    records: dict[str, Any] | list[dict[str, Any]], model: Pipeline | None = None
+    records: dict[str, Any] | list[dict[str, Any]],
+    model: Pipeline | None = None,
+    feature_columns: Sequence[str] | None = None,
 ) -> list[float]:
     if isinstance(records, dict):
         records = [records]
@@ -512,7 +640,7 @@ def predict_records(
         raise ValueError("records must contain at least one item")
 
     df = pd.DataFrame(records)
-    predictions = predict_dataframe(df, model=model)
+    predictions = predict_dataframe(df, model=model, feature_columns=feature_columns)
     return [float(value) for value in predictions]
 
 

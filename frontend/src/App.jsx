@@ -360,138 +360,139 @@ function SummaryCard({ label, value, description }) {
         <p className="text-lg font-semibold">{formatDisplayValue(value)}</p>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <form
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        handleGenerateSyntheticData()
-                      }}
-                      className="flex w-full flex-wrap items-center justify-end gap-3 rounded-2xl border bg-muted/20 p-3 lg:max-w-5xl">
-                      <InputGroup className="w-full sm:w-[18rem]">
-                        <InputGroupAddon align="inline-start">
-                          <Hash className="size-4" />
-                          <span className="ml-2 whitespace-nowrap">Batch</span>
-                        </InputGroupAddon>
-                        <InputGroupInput
-                          id="synthetic-count"
-                          type="number"
-                          min="1"
-                          value={syntheticForm.count}
-                          onChange={(event) => updateSyntheticField('count', event.target.value)}
-                          className="h-14 px-4 text-2xl font-semibold"
-                        />
-                      </InputGroup>
+    </Card>
+  )
+}
 
-                      <InputGroup className="w-full sm:w-[18rem]">
-                        <InputGroupAddon align="inline-start">
-                          <Shuffle className="size-4" />
-                          <span className="ml-2 whitespace-nowrap">Seed</span>
-                        </InputGroupAddon>
-                        <InputGroupInput
-                          id="synthetic-random-state"
-                          type="number"
-                          value={syntheticForm.random_state}
-                          onChange={(event) => updateSyntheticField('random_state', event.target.value)}
-                          className="h-14 px-4 text-2xl font-semibold"
-                        />
-                      </InputGroup>
+function App() {
+  const [theme, setTheme] = useState(localStorage.getItem(THEME_STORAGE_KEY) || 'dark')
+  const [health, setHealth] = useState({ status: 'loading', error: null })
+  const [trainForm, setTrainForm] = useState(TRAIN_DEFAULTS)
+  const [trainResult, setTrainResult] = useState(null)
+  const [trainLoading, setTrainLoading] = useState(false)
+  const [trainError, setTrainError] = useState('')
+  const [trainMetrics, setTrainMetrics] = useState(null)
+  const [trainGraphs, setTrainGraphs] = useState([])
+  
+  const [datasetPage, setDatasetPage] = useState(1)
+  const [datasetPageSize, setDatasetPageSize] = useState('20')
+  const [datasetResult, setDatasetResult] = useState(null)
+  const [datasetLoading, setDatasetLoading] = useState(false)
+  const [datasetError, setDatasetError] = useState('')
+  
+  const [selectedModelPath, setSelectedModelPath] = useState('')
+  const [selectedModelDetails, setSelectedModelDetails] = useState(null)
+  const [selectedModelLoading, setSelectedModelLoading] = useState(false)
+  const [selectedModelError, setSelectedModelError] = useState('')
+  
+  const [modelsCatalog, setModelsCatalog] = useState({ models: [], model_count: 0 })
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState('')
+  
+  const [predictInput, setPredictInput] = useState('')
+  const [predictResult, setPredictResult] = useState(null)
+  const [predictLoading, setPredictLoading] = useState(false)
+  const [predictError, setPredictError] = useState('')
+  
+  const [syntheticForm, setSyntheticForm] = useState({ count: '', random_state: '', include_target: false })
+  const [syntheticResult, setSyntheticResult] = useState(null)
+  const [syntheticLoading, setSyntheticLoading] = useState(false)
+  const [syntheticError, setSyntheticError] = useState('')
+  
+  const [reportResult, setReportResult] = useState(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportError, setReportError] = useState('')
+  const [reportMetrics, setReportMetrics] = useState(null)
+  
+  const [brokenImages, setBrokenImages] = useState({})
+  const [viewerGraph, setViewerGraph] = useState(null)
+  const [datasetInfoOpen, setDatasetInfoOpen] = useState(false)
 
-                      <InputGroup className="w-full sm:w-[24rem]">
-                        <InputGroupAddon align="inline-start">
-                          <span className="whitespace-nowrap">Target</span>
-                        </InputGroupAddon>
-                        <InputGroupInput
-                          readOnly
-                          value={
-                            syntheticForm.include_target
-                              ? 'Include when available'
-                              : 'Exclude target'
-                          }
-                          className="h-14 px-4 text-base"
-                        />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupButton
-                            type="button"
-                            variant={syntheticForm.include_target ? 'secondary' : 'outline'}
-                            onClick={() =>
-                              updateSyntheticField('include_target', !syntheticForm.include_target)
-                            }
-                            className="h-14 px-5 text-sm font-medium">
-                            Toggle
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }, [theme])
 
-                      <InputGroupButton
-                        type="submit"
-                        disabled={syntheticLoading}
-                        className="h-14 min-w-[11rem] rounded-2xl bg-lime-500 px-6 text-xl font-medium text-black hover:bg-lime-400 disabled:bg-lime-500/70">
-                        {syntheticLoading ? 'Generating...' : 'Generate'}
-                      </InputGroupButton>
-                    </form>
-                  </div>
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch('/api/v1/health')
+        if (!response.ok) throw new Error(`Health check failed: ${response.status}`)
+        setHealth({ status: 'ok', error: null })
+      } catch (error) {
+        setHealth({ status: 'error', error: error.message })
+      }
+    }
+    checkHealth()
+    const interval = setInterval(checkHealth, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
-                  {syntheticError ? (
-                    <Alert variant="destructive">
-                      <AlertTitle>Synthetic Data Failed</AlertTitle>
-                      <AlertDescription>{syntheticError}</AlertDescription>
-                    </Alert>
-                  ) : null}
+  useEffect(() => {
+    const loadModels = async () => {
+      setModelsLoading(true)
+      setModelsError('')
+      try {
+        const response = await fetchModels()
+        const normalized = (response.models ?? []).map(normalizeModelEntry).filter(Boolean)
+        setModelsCatalog({ models: normalized, model_count: normalized.length })
+      } catch (error) {
+        setModelsError(error.message)
+        setModelsCatalog({ models: [], model_count: 0 })
+      } finally {
+        setModelsLoading(false)
+      }
+    }
+    loadModels()
+  }, [])
 
-                  {syntheticLoading ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {Array.from({ length: 2 }).map((_, index) => (
-                        <Skeleton key={index} className="h-16 w-full" />
-                      ))}
-                    </div>
-                  ) : syntheticResult ? (
-                    <div className="space-y-2 text-xs text-muted-foreground">
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div>
-                          <span className="font-medium text-foreground">Requested:</span>{' '}
-                          {syntheticResult.requested_count ?? '--'}
-                        </div>
-                        <div>
-                          <span className="font-medium text-foreground">Generated:</span>{' '}
-                          {syntheticResult.actual_count ?? '--'}
-                        </div>
-                      </div>
-                      <ScrollArea className="max-h-40 rounded-md border">
-                        <pre className="whitespace-pre-wrap wrap-break-word p-3 text-xs">
-                          {safeJsonStringify(syntheticResult.records) || 'No records returned.'}
-                        </pre>
-                      </ScrollArea>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Fill batch and seed, then generate records for prediction.
-                    </p>
-                  )}
+  useEffect(() => {
+    if (!selectedModelPath || selectedModelPath === NO_MODELS_VALUE) {
+      setSelectedModelDetails(null)
+      setSelectedModelError('')
+      return
+    }
+    const loadDetails = async () => {
+      setSelectedModelLoading(true)
+      setSelectedModelError('')
+      try {
+        const response = await fetchModelDetails({ model_path: selectedModelPath })
+        setSelectedModelDetails(response)
+      } catch (error) {
+        setSelectedModelError(error.message)
+        setSelectedModelDetails(null)
+      } finally {
+        setSelectedModelLoading(false)
+      }
+    }
+    loadDetails()
+  }, [selectedModelPath])
 
-                  <div className="space-y-2">
-                    <Label htmlFor="predict-json">Records JSON</Label>
-                    <Textarea
-                      id="predict-json"
-                      value={predictInput}
-                      onChange={(event) => setPredictInput(event.target.value)}
-                      className="min-h-56 font-mono text-sm"
-                    />
-                  </div>
+  useEffect(() => {
+    const metrics = getTrainingMetrics(trainResult)
+    setTrainMetrics(metrics)
+  }, [trainResult])
 
-                  <div className="flex justify-end">
-                    <Button onClick={handlePredict} disabled={predictLoading}>
-                      {predictLoading ? 'Running...' : 'Run Prediction'}
-                    </Button>
-                  </div>
+  useEffect(() => {
+    const graphs = toGraphList(trainResult)
+    setTrainGraphs(graphs)
+  }, [trainResult])
 
-                  {predictError ? (
-                    <Alert variant="destructive">
-                      <AlertTitle>Prediction Failed</AlertTitle>
-                      <AlertDescription>{predictError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                </div>
+  useEffect(() => {
+    const plots = toGraphList(reportResult)
+    const reportMetricsData = getTrainingMetrics(reportResult)
+    setReportMetrics(reportMetricsData)
+  }, [reportResult])
+
+  const hasAnyModel = modelsCatalog.models.length > 0
+  const activeModel = selectedModelPath && selectedModelPath !== NO_MODELS_VALUE
+    ? modelsCatalog.models.find((m) => m.model_path === selectedModelPath)
+    : null
+  const activeModelPath = activeModel?.model_path
   const reportPlots =
     reportResult?.plot_urls && typeof reportResult.plot_urls === 'object'
       ? Object.entries(reportResult.plot_urls)
@@ -1168,61 +1169,43 @@ function SummaryCard({ label, value, description }) {
                         event.preventDefault()
                         handleGenerateSyntheticData()
                       }}
-                      className="space-y-3">
-                      <InputGroup>
+                      className="flex flex-wrap items-end gap-2">
+                      <div className="flex-1 min-w-40">
+                        <Label htmlFor="synthetic-count" className="text-xs mb-1 block">
+                          <Hash className="inline size-3 mr-1 align-text-bottom" />
+                          Batch
+                        </Label>
                         <InputGroupInput
                           id="synthetic-count"
                           type="number"
                           min="1"
-                          placeholder="Batch row count"
+                          placeholder="10"
                           value={syntheticForm.count}
                           onChange={(event) => updateSyntheticField('count', event.target.value)}
+                          className="h-10 text-center text-lg font-semibold"
                         />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupButton type="button" variant="secondary" disabled>
-                            Batch
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
+                      </div>
 
-                      <InputGroup>
+                      <div className="flex-1 min-w-40">
+                        <Label htmlFor="synthetic-random-state" className="text-xs mb-1 block">
+                          <Shuffle className="inline size-3 mr-1 align-text-bottom" />
+                          Seed
+                        </Label>
                         <InputGroupInput
                           id="synthetic-random-state"
                           type="number"
-                          placeholder="Random state"
+                          placeholder="42"
                           value={syntheticForm.random_state}
                           onChange={(event) => updateSyntheticField('random_state', event.target.value)}
+                          className="h-10 text-center text-lg font-semibold"
                         />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupButton type="button" variant="secondary" disabled>
-                            Seed
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
+                      </div>
 
-                      <InputGroup>
-                        <InputGroupInput
-                          readOnly
-                          value={
-                            syntheticForm.include_target
-                              ? 'Include target column when available'
-                              : 'Do not include target column'
-                          }
-                        />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupButton
-                            type="button"
-                            variant={syntheticForm.include_target ? 'secondary' : 'outline'}
-                            onClick={() =>
-                              updateSyntheticField('include_target', !syntheticForm.include_target)
-                            }>
-                            Toggle target
-                          </InputGroupButton>
-                        </InputGroupAddon>
-                      </InputGroup>
-
-                      <Button type="submit" className="w-full" disabled={syntheticLoading}>
-                        {syntheticLoading ? 'Generating...' : 'Generate Synthetic Data'}
+                      <Button 
+                        type="submit" 
+                        disabled={syntheticLoading}
+                        className="h-10 min-w-32 rounded-lg bg-lime-500 px-4 text-base font-semibold text-black hover:bg-lime-400 disabled:bg-lime-500/70">
+                        {syntheticLoading ? 'Generating...' : 'Generate'}
                       </Button>
                     </form>
 

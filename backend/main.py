@@ -24,6 +24,7 @@ from model.model_service import REPORTS_DIR
 from model.model_service import compare_models
 from model.model_service import generate_synthetic_dataset
 from model.model_service import get_model_details
+from model.model_service import get_trainable_columns
 from model.model_service import list_available_models
 from model.model_service import load_model
 from model.model_service import predict_records
@@ -45,6 +46,7 @@ PLOT_RENAME_MAP = {
 class TrainRequest(BaseModel):
     dataset_path: str | None = None
     model_path: str | None = None
+    feature_columns: list[str] | None = None
     test_size: float = Field(default=0.2, gt=0.0, lt=1.0)
     random_state: int = 42
 
@@ -57,6 +59,8 @@ class PredictRequest(BaseModel):
 class SyntheticDataRequest(BaseModel):
     count: int = Field(default=1, ge=1, le=5000)
     dataset_path: str | None = None
+    model_path: str | None = None
+    feature_columns: list[str] | None = None
     random_state: int = 42
     include_target: bool = False
 
@@ -91,13 +95,18 @@ def _predict_with_model(
 ) -> dict[str, Any]:
     resolved_model_path = model_path or str(DEFAULT_MODEL_PATH)
     model = load_model(resolved_model_path)
-    predictions = predict_records(records, model=model)
     model_details = get_model_details(resolved_model_path)
+    required_features = model_details.get("feature_columns", FEATURES)
+    predictions = predict_records(
+        records,
+        model=model,
+        feature_columns=required_features,
+    )
 
     return {
         "model": model_details,
         "model_path": str(model_details["model_path"]),
-        "required_features": FEATURES,
+        "required_features": required_features,
         "predictions": predictions,
     }
 
@@ -188,6 +197,7 @@ def train_model(payload: TrainRequest) -> dict[str, Any]:
         result = train_and_save_model(
             dataset_path=dataset_path,
             model_path=model_path,
+            feature_columns=payload.feature_columns,
             test_size=payload.test_size,
             random_state=payload.random_state,
         )
@@ -242,6 +252,18 @@ def train_model(payload: TrainRequest) -> dict[str, Any]:
     }
 
 
+@app.get("/api/v1/trainable-columns")
+def get_trainable_columns_api(
+    dataset_path: Annotated[str | None, Query()] = None,
+) -> dict[str, Any]:
+    try:
+        return get_trainable_columns(dataset_path or DEFAULT_DATASET_PATH)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - unexpected filesystem or parse errors
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/v1/predict")
 def predict_sales(payload: PredictRequest) -> dict[str, Any]:
     try:
@@ -287,11 +309,18 @@ def get_model_by_path(
 @app.post("/api/v1/synthetic-data")
 def create_synthetic_data(payload: SyntheticDataRequest) -> dict[str, Any]:
     try:
+        model_details = None
+        if payload.model_path:
+            model_details = get_model_details(payload.model_path)
+        feature_columns = payload.feature_columns or (
+            model_details.get("feature_columns") if model_details else None
+        )
         return generate_synthetic_dataset(
             count=payload.count,
             dataset_path=payload.dataset_path or DEFAULT_DATASET_PATH,
             random_state=payload.random_state,
             include_target=payload.include_target,
+            feature_columns=feature_columns,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

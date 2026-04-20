@@ -18,6 +18,26 @@ Compatibility Wrapper
 
 - model_service.py re-exports the public API from core.py for existing imports.
 
+Module Split
+
+- training_logic.py
+  - Training and prediction helpers only
+  - load_training_data
+  - train_and_save_model
+  - retrain_model
+  - load_model
+  - predict_dataframe
+  - predict_records
+
+- data_logic.py
+  - Non-training helpers
+  - get_model_details
+  - list_available_models
+  - generate_synthetic_dataset
+  - get_trainable_columns
+  - evaluate_model_on_dataset
+  - compare_models
+
 Model Type
 
 - Pipeline:

@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 from .core import CATEGORICAL_FEATURES
-from .core import DEFAULT_DATASET_PATH
-from .core import DEFAULT_MODEL_PATH
-from .core import FEATURES
 from .core import MODEL_DIR
 from .core import NUMERIC_FEATURES
 from .core import REPORTS_DIR
 from .core import TARGET
-from .core import compare_models
-from .core import evaluate_model_on_dataset
-from .core import generate_synthetic_dataset
-from .core import get_model_details
-from .core import list_available_models
-from .core import load_model
-from .core import load_training_data
-from .core import predict_dataframe
-from .core import predict_records
-from .core import retrain_model
-from .core import train_and_save_model
+from .data_logic import DEFAULT_DATASET_PATH
+from .data_logic import DEFAULT_MODEL_PATH
+from .data_logic import FEATURES
+from .data_logic import compare_models
+from .data_logic import evaluate_model_on_dataset
+from .data_logic import generate_synthetic_dataset
+from .data_logic import get_model_details
+from .data_logic import get_trainable_columns
+from .data_logic import list_available_models
+from .training_logic import load_model
+from .training_logic import load_training_data
+from .training_logic import predict_dataframe
+from .training_logic import predict_records
+from .training_logic import retrain_model
+from .training_logic import train_and_save_model
 
 __all__ = [
     "MODEL_DIR",
@@ -36,6 +37,7 @@ __all__ = [
     "get_model_details",
     "list_available_models",
     "generate_synthetic_dataset",
+    "get_trainable_columns",
     "evaluate_model_on_dataset",
     "compare_models",
     "predict_dataframe",
