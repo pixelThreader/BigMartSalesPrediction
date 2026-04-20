@@ -62,8 +62,8 @@ export function fetchModels() {
     return request('/api/v1/models')
 }
 
-export function fetchModelDetails(modelPath) {
-    const query = toQueryString({ model_path: modelPath })
+export function fetchModelDetails({ model_path } = {}) {
+    const query = toQueryString({ model_path })
     return request(`/api/v1/models/details${query ? `?${query}` : ''}`)
 }
 
