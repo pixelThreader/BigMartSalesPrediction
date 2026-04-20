@@ -7,6 +7,10 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -72,6 +76,72 @@ def _build_model() -> Pipeline:
     )
 
 
+def _save_performance_plots(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    output_dir: Path,
+) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    residuals = y_true - y_pred
+    plot_paths: dict[str, str] = {}
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(y_true, y_pred, alpha=0.5, s=18)
+    min_axis = float(min(np.min(y_true), np.min(y_pred)))
+    max_axis = float(max(np.max(y_true), np.max(y_pred)))
+    ax.plot([min_axis, max_axis], [min_axis, max_axis], "r--", linewidth=1.5)
+    ax.set_title("Actual vs Predicted")
+    ax.set_xlabel("Actual Sales")
+    ax.set_ylabel("Predicted Sales")
+    ax.grid(alpha=0.3)
+    actual_vs_pred_path = output_dir / "actual_vs_predicted.png"
+    fig.tight_layout()
+    fig.savefig(actual_vs_pred_path, dpi=150)
+    plt.close(fig)
+    plot_paths["actual_vs_predicted"] = str(actual_vs_pred_path)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(y_pred, residuals, alpha=0.5, s=18)
+    ax.axhline(0.0, color="r", linestyle="--", linewidth=1.5)
+    ax.set_title("Residuals vs Predicted")
+    ax.set_xlabel("Predicted Sales")
+    ax.set_ylabel("Residuals")
+    ax.grid(alpha=0.3)
+    residuals_path = output_dir / "residuals_vs_predicted.png"
+    fig.tight_layout()
+    fig.savefig(residuals_path, dpi=150)
+    plt.close(fig)
+    plot_paths["residuals_vs_predicted"] = str(residuals_path)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist(residuals, bins=40, alpha=0.75, color="#1f77b4")
+    ax.set_title("Residual Distribution")
+    ax.set_xlabel("Residual")
+    ax.set_ylabel("Frequency")
+    ax.grid(alpha=0.3)
+    residual_hist_path = output_dir / "residual_distribution.png"
+    fig.tight_layout()
+    fig.savefig(residual_hist_path, dpi=150)
+    plt.close(fig)
+    plot_paths["residual_distribution"] = str(residual_hist_path)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.hist(y_true, bins=40, alpha=0.6, label="Actual")
+    ax.hist(y_pred, bins=40, alpha=0.6, label="Predicted")
+    ax.set_title("Actual vs Predicted Distribution")
+    ax.set_xlabel("Sales")
+    ax.set_ylabel("Frequency")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    dist_path = output_dir / "actual_vs_predicted_distribution.png"
+    fig.tight_layout()
+    fig.savefig(dist_path, dpi=150)
+    plt.close(fig)
+    plot_paths["actual_vs_predicted_distribution"] = str(dist_path)
+
+    return plot_paths
+
+
 def train_and_save_model(
     dataset_path: str | Path = DEFAULT_DATASET_PATH,
     model_path: str | Path = DEFAULT_MODEL_PATH,
@@ -94,6 +164,7 @@ def train_and_save_model(
     report_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = report_dir / "metrics.json"
     y_true = y_val.to_numpy()
+    plot_paths = _save_performance_plots(y_true, predictions, report_dir)
     metrics = {
         "mae": float(mean_absolute_error(y_true, predictions)),
         "mse": float(mean_squared_error(y_true, predictions)),
@@ -111,7 +182,7 @@ def train_and_save_model(
         "random_state": random_state,
         "target_column": TARGET,
         "feature_columns": list(x_data.columns),
-        "metrics": metrics,
+        "plots": plot_paths,
     }
     metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {
@@ -121,7 +192,7 @@ def train_and_save_model(
         "target_column": TARGET,
         "feature_columns": list(x_data.columns),
         **metrics,
-        "plots": {},
+        "plots": plot_paths,
     }
 
 
