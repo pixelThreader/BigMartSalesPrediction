@@ -1059,23 +1059,31 @@ function App() {
                         <div className="grid gap-2 text-sm text-muted-foreground">
                           <div>
                             <span className="font-medium text-foreground">Target: </span>
-                            {activeModel.target || '--'}
+                            {activeModel.model_summary?.Target || activeModel.target || '--'}
                           </div>
                           <div>
                             <span className="font-medium text-foreground">Test Size: </span>
-                            {activeModel.test_size ?? '--'}
+                            {activeModel.model_summary?.['Test Size'] ?? activeModel.test_size ?? '--'}
                           </div>
                           <div>
                             <span className="font-medium text-foreground">Random State: </span>
-                            {activeModel.random_state ?? '--'}
+                            {activeModel.model_summary?.['Random State'] ?? activeModel.random_state ?? '--'}
                           </div>
                           <div>
                             <span className="font-medium text-foreground">Modified: </span>
-                            {activeModel.modified_at || '--'}
+                            {activeModel.model_summary?.Modified
+                              ? (typeof activeModel.model_summary.Modified === 'number'
+                                ? new Date(activeModel.model_summary.Modified * 1000).toLocaleString()
+                                : activeModel.model_summary.Modified)
+                              : activeModel.modified_at || '--'}
                           </div>
                           <div>
                             <span className="font-medium text-foreground">Created: </span>
-                            {activeModel.created_at || '--'}
+                            {activeModel.model_summary?.Created
+                              ? (typeof activeModel.model_summary.Created === 'number'
+                                ? new Date(activeModel.model_summary.Created * 1000).toLocaleString()
+                                : activeModel.model_summary.Created)
+                              : activeModel.created_at || '--'}
                           </div>
                         </div>
                       </div>
