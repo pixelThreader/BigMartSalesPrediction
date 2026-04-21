@@ -48,12 +48,38 @@ def get_model_details(model_path: str | Path = DEFAULT_MODEL_PATH) -> dict[str, 
         raise FileNotFoundError(f"Model file not found at {path}")
     metrics_path = REPORTS_DIR / path.stem / "metrics.json"
     feature_columns = FEATURES
-    if metrics_path.exists():
+    metrics = {}
+    summary = {
+        "target": TARGET,
+        "test_size": None,
+        "random_state": None,
+        "modified": None,
+        "created": None,
+    }
+    has_report = metrics_path.exists()
+    if has_report:
         try:
             payload = json.loads(metrics_path.read_text(encoding="utf-8"))
             feature_columns = list(payload.get("feature_columns", FEATURES))
+            metrics = {
+                "mae": payload.get("mae"),
+                "mse": payload.get("mse"),
+                "rmse": payload.get("rmse"),
+                "r2": payload.get("r2"),
+                "mape": payload.get("mape"),
+            }
+            summary["test_size"] = payload.get("test_size")
+            summary["random_state"] = payload.get("random_state")
         except Exception:
             pass
+    # File timestamps
+    try:
+        stat = path.stat()
+        summary["modified"] = getattr(stat, "st_mtime", None)
+        summary["created"] = getattr(stat, "st_ctime", None)
+    except Exception:
+        pass
+    size_bytes = path.stat().st_size if path.exists() else None
     return {
         "model_path": str(path),
         "model_name": path.name,
@@ -63,6 +89,16 @@ def get_model_details(model_path: str | Path = DEFAULT_MODEL_PATH) -> dict[str, 
         "target": TARGET,
         "report_dir": str(REPORTS_DIR / path.stem),
         "metrics_path": str(metrics_path),
+        "metrics": metrics,
+        "size_bytes": size_bytes,
+        "has_report": has_report,
+        "model_summary": {
+            "Target": summary["target"],
+            "Test Size": summary["test_size"] if summary["test_size"] is not None else "--",
+            "Random State": summary["random_state"] if summary["random_state"] is not None else "--",
+            "Modified": summary["modified"] if summary["modified"] is not None else "--",
+            "Created": summary["created"] if summary["created"] is not None else "--",
+        },
     }
 
 
